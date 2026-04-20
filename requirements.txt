@@ -1,0 +1,3 @@
+# bcrypt is only needed for the --bcrypt demo flag
+# The main demo (MD5 + SHA-256) works with no dependencies
+bcrypt>=4.0.0
