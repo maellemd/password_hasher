@@ -1,55 +1,141 @@
-# password cracker - educational
+# Password Hasher
 
-I built this to understand how password hashing actually works and why some algorithms are way worse than others. its not a real cracker obviously, everything runs locally on hashes you make yourself.
+Password Hasher is a small Python command-line project that explores how password hashing works and why choosing the right hashing algorithm matters for password security.
 
-![demo](demo.png)
+## Project objective
 
----
+The aim of this project is to understand the difference between general-purpose cryptographic hash functions and algorithms designed for password storage. It uses MD5, SHA-256 and bcrypt to demonstrate hashing, password verification, salting and the cost of password guessing in a controlled environment.
 
-## what it does
+The demonstrations use predefined example passwords, locally generated hashes and a small bundled wordlist. No real credentials or external systems are involved.
 
-It does two types of attacks :
+## Features
 
-- **dictionary attack** : takes a wordlist and tries each word until it finds a match
-- **brute force** : tries literally every combination possible up to a certain length (gets slow fast)
+- Generate MD5 and SHA-256 hashes from a sample password.
+- Demonstrate bounded dictionary and brute-force searches using synthetic data.
+- Display the number of attempts, elapsed time and demonstration results.
+- Demonstrate bcrypt salting and correct/incorrect password verification.
+- Compare illustrative MD5 and bcrypt hash creation times.
+- Provide command-line help, error handling and automated tests.
 
-but also has a bcrypt demo that shows the timing difference between algorithms, that part really surprised me honestly
+## Technologies
 
-## How to run it
+| Technology | Purpose |
+|---|---|
+| Python 3 | Main programming language |
+| `hashlib` | MD5 and SHA-256 hashing |
+| `bcrypt` | Salted password hashing and verification |
+| `itertools` and `string` | Bounded sample combinations |
+| `time` | Elapsed-time measurement |
+| `pathlib` | File path handling |
+| `argparse` | Command-line argument handling |
+| `unittest` | Automated testing |
 
-You need python 3, thats it for the basic version
+## Installation
+
+Clone or download the repository and open its folder in a terminal. Make sure Python 3 is installed.
+
+Install bcrypt for the optional password-storage demonstration and the complete test suite:
 
 ```bash
-git clone https://github.com/your-username/password-cracker.git
-cd password-cracker
+python -m pip install -r requirements.txt
+```
+
+The default demonstration works with Python's standard library alone. Depending on your system, use `python3` instead of `python` in the commands below.
+
+## Usage and screenshots
+
+### 1. Password hashing demonstration
+
+```bash
 python cracker.py
 ```
 
-If you want the bcrypt demo :
+The default demonstration generates MD5 and SHA-256 hashes from a predefined sample password and displays the results of two restricted search methods using the project's sample data.
+
+![Password hashing demonstration](screenshots/hashing_demo.png)
+
+### 2. Bcrypt and password security
 
 ```bash
-pip install bcrypt
 python cracker.py --bcrypt
 ```
 
-## What i learned
+This demonstration generates two salted hashes of the same example password, verifies correct and incorrect passwords, and displays illustrative hash creation times. The random salts explain why identical passwords can produce different stored hashes.
 
-I thought md5 was "broken" in the sense that someone found a bug in it, but that's not really it. the problem is just that its fast and fast hashing is the opposite of what you want for passwords because it means an attacker can try millions of guesses per second.
+![Bcrypt demonstration](screenshots/bcrypt_demo.png)
 
-Bcrypt is slow on purpose, around 100ms per hash by design. doesnt sound like much but it makes brute forcing completely impractical.
+### 3. Automated tests
 
-The dictionary attack result also surprised me - "abc" shows up as attempt #6 in a 30 word list. real wordlists have millions of entries and cover basically everything a normal person would use as a password.
+```bash
+python -m unittest -v
+```
 
-## files
+The test suite contains 11 tests covering known hash values, password verification, invalid algorithms, missing dependencies, bcrypt salting and input length, missing files and command-line behavior. Bcrypt-specific tests are skipped if bcrypt is not installed.
 
-| file | description |
-|------|-------------|
-| `cracker.py` | main script |
-| `wordlist.txt` | small sample wordlist for the demo |
-| `requirements.txt` | just bcrypt, and its optional |
+![Automated test results](screenshots/automated_tests.png)
+
+### 4. Command-line help
+
+```bash
+python cracker.py --help
+```
+
+Displays the available command-line options and usage instructions.
+
+![Command-line help](screenshots/cli_help.png)
+
+## Project structure
+
+```text
+password_hasher/
+├── cracker.py
+├── test_cracker.py
+├── requirements.txt
+├── wordlist.txt
+├── .gitignore
+├── README.md
+└── screenshots/
+    ├── hashing_demo.png
+    ├── bcrypt_demo.png
+    ├── automated_tests.png
+    └── cli_help.png
+```
+
+| File | Purpose |
+|---|---|
+| `cracker.py` | Main application and educational demonstrations |
+| `test_cracker.py` | Automated tests |
+| `requirements.txt` | Optional bcrypt dependency |
+| `wordlist.txt` | Bundled sample data |
+| `.gitignore` | Excludes local and generated files from Git |
+| `screenshots/` | Screenshots of the revised application |
+
+## Technical decisions and improvements
+
+The revised version keeps the original single-script structure while improving reliability and readability. File paths are resolved relative to the script, files are managed with context managers, and errors are handled at the command-line entry point. The program uses `time.perf_counter()` for elapsed-time measurements, `argparse` for command-line options and simple type hints to clarify function inputs and outputs.
+
+Bcrypt remains optional so that the basic demonstration can run without external dependencies. Automated tests help check that the main behavior remains consistent after changes.
+
+## Learning objectives
+
+This project provides practice with Python functions, loops, file handling, exceptions, command-line interfaces and unit testing. It also illustrates the distinction between hashing and encryption, deterministic hashes and salted password hashes, and why password storage requires different security properties from general-purpose hashing.
+
+## Security and limitations
+
+MD5 has known collision-resistance weaknesses. Both MD5 and SHA-256 are fast general-purpose hash functions and are unsuitable on their own for password storage. Bcrypt uses random salts and a configurable computational cost to make password guessing more expensive, but weak passwords can still be vulnerable.
+
+The application rejects bcrypt passwords longer than 72 UTF-8 bytes to avoid silent truncation. Timing measurements are illustrative and depend on hardware and workload. The search demonstrations are intentionally restricted and the program is not a production authentication system. Use synthetic data only.
 
 ## Future improvements
-- no salted hash support (Important in real apps)
-- brute force is single threaded so it gets slow above 4-5 chars
-- wordlist is tiny, you can replace it with rockyou.txt if you want to test something more realistic
-- no sha512 or argon2 support yet
+
+- Add more tests for edge cases and unexpected input.
+- Improve the explanation of password-storage concepts in the terminal output.
+- Set up automated test execution with GitHub Actions.
+
+## References
+
+- [Python hashlib documentation](https://docs.python.org/3/library/hashlib.html)
+- [Python pathlib documentation](https://docs.python.org/3/library/pathlib.html)
+- [Python argparse documentation](https://docs.python.org/3/library/argparse.html)
+- [bcrypt documentation](https://github.com/pyca/bcrypt)
+- [OWASP Password Storage Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html)

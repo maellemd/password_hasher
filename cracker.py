@@ -1,14 +1,16 @@
+import argparse
 import hashlib
 import time
 import itertools
 import string
 import sys
+from pathlib import Path
 
 
 # I learned about hashlib from the python docs
 # hashlib lets you hash strings with different algorithms (md5, sha256, etc.)
 
-def hash_password(password, algorithm):
+def hash_password(password: str, algorithm: str) -> str:
     # encode the string first because hashlib needs bytes not a string
     encoded = password.encode("utf-8")
 
@@ -19,24 +21,30 @@ def hash_password(password, algorithm):
     elif algorithm == "bcrypt":
         # bcrypt needs to be installed separately (pip install bcrypt)
         # i put it here so the rest of the script still works without it
-        try:
-            import bcrypt
-            hashed = bcrypt.hashpw(encoded, bcrypt.gensalt())
-            return hashed.decode("utf-8")
-        except ImportError:
-            print("bcrypt is not installed, run: pip install bcrypt")
-            sys.exit(1)
-    else:
-        print(f"unknown algorithm: {algorithm}")
-        sys.exit(1)
+        bcrypt = load_bcrypt()
+        if len(encoded) > 72:
+            raise ValueError("bcrypt passwords must not exceed 72 UTF-8 bytes")
+        return bcrypt.hashpw(encoded, bcrypt.gensalt()).decode("utf-8")
+    raise ValueError(f"unknown algorithm: {algorithm}")
 
 
-def check_if_match(candidate, target_hash, algorithm):
+def load_bcrypt():
+    try:
+        import bcrypt
+    except ImportError as exc:
+        raise RuntimeError("bcrypt is unavailable; run: pip install -r requirements.txt") from exc
+    return bcrypt
+
+
+def check_if_match(candidate: str, target_hash: str, algorithm: str) -> bool:
     # bcrypt hashes are different every time (because of the salt)
     # so you can't just compare them with == like md5/sha256
     if algorithm == "bcrypt":
-        import bcrypt
-        return bcrypt.checkpw(candidate.encode("utf-8"), target_hash.encode("utf-8"))
+        bcrypt = load_bcrypt()
+        encoded = candidate.encode("utf-8")
+        if len(encoded) > 72:
+            raise ValueError("bcrypt passwords must not exceed 72 UTF-8 bytes")
+        return bcrypt.checkpw(encoded, target_hash.encode("utf-8"))
 
     # for md5 and sha256 we just hash the candidate and compare
     return hash_password(candidate, algorithm) == target_hash
@@ -44,39 +52,27 @@ def check_if_match(candidate, target_hash, algorithm):
 
 # ---- dictionary attack ----
 # tries every word from a wordlist file against the hash
-# this is how most real attacks work apparently
+# This demonstration uses only bundled sample data.
 
-def dictionary_attack(target_hash, wordlist_file, algorithm):
+def dictionary_attack(target_hash: str, wordlist_file: Path, algorithm: str) -> dict:
     attempts = 0
-    start = time.time()  # TODO: maybe use perf_counter instead? looked it up and its more precise
+    start = time.perf_counter()
 
-    try:
-        f = open(wordlist_file, "r", encoding="utf-8", errors="ignore")
-    except FileNotFoundError:
-        print(f"wordlist file not found: {wordlist_file}")
-        return None
+    with open(wordlist_file, "r", encoding="utf-8") as f:
+        for line in f:
+            word = line.rstrip("\r\n")
+            if word == "":
+                continue
+            attempts += 1
+            if check_if_match(word, target_hash, algorithm):
+                return {
+                    "found": True,
+                    "password": word,
+                    "attempts": attempts,
+                    "time": time.perf_counter() - start,
+                }
 
-    for line in f:
-        word = line.strip()
-
-        # skip empty lines
-        if word == "":
-            continue
-
-        attempts += 1
-
-        if check_if_match(word, target_hash, algorithm):
-            elapsed = time.time() - start
-            f.close()
-            return {
-                "found": True,
-                "password": word,
-                "attempts": attempts,
-                "time": elapsed
-            }
-
-    f.close()
-    elapsed = time.time() - start
+    elapsed = time.perf_counter() - start
     return {
         "found": False,
         "password": None,
@@ -90,12 +86,12 @@ def dictionary_attack(target_hash, wordlist_file, algorithm):
 # WARNING: gets very slow very fast if you increase max_length
 # 4 chars = ~1.7 million combinations with digits+lowercase
 
-def brute_force_attack(target_hash, algorithm, max_length=3):
+def brute_force_attack(target_hash: str, algorithm: str, max_length: int = 3) -> dict:
     # only using digits and lowercase for now, adding uppercase would make it way too slow
     charset = string.digits + string.ascii_lowercase
 
     attempts = 0
-    start = time.time()
+    start = time.perf_counter()
 
     for length in range(1, max_length + 1):
         for combo in itertools.product(charset, repeat=length):
@@ -103,7 +99,7 @@ def brute_force_attack(target_hash, algorithm, max_length=3):
             attempts += 1
 
             if check_if_match(candidate, target_hash, algorithm):
-                elapsed = time.time() - start
+                elapsed = time.perf_counter() - start
                 return {
                     "found": True,
                     "password": candidate,
@@ -111,7 +107,7 @@ def brute_force_attack(target_hash, algorithm, max_length=3):
                     "time": elapsed
                 }
 
-    elapsed = time.time() - start
+    elapsed = time.perf_counter() - start
     return {
         "found": False,
         "password": None,
@@ -120,7 +116,7 @@ def brute_force_attack(target_hash, algorithm, max_length=3):
     }
 
 
-def print_result(result, mode, algorithm):
+def print_result(result: dict, mode: str, algorithm: str) -> None:
     print(f"\n  [{mode.upper()} - {algorithm.upper()}]")
     print(f"  attempts : {result['attempts']}")
     print(f"  time     : {result['time']:.4f}s")
@@ -134,38 +130,32 @@ def print_result(result, mode, algorithm):
 # this is separate because bcrypt needs to be installed
 # the point is to show how much slower it is compared to md5
 
-def bcrypt_demo():
-    try:
-        import bcrypt
-    except ImportError:
-        print("install bcrypt first: pip install bcrypt")
-        return
+def bcrypt_demo() -> None:
+    password = "hunter2"  # Synthetic example, not a real credential.
+    print("\n--- bcrypt password storage demonstration ---\n")
+    start = time.perf_counter()
+    first_hash = hash_password(password, "bcrypt")
+    elapsed = time.perf_counter() - start
+    second_hash = hash_password(password, "bcrypt")
 
-    password = "hunter2"
-    print(f"\n--- bcrypt vs md5 timing (password: '{password}') ---\n")
-
-    # time md5 - do it 100 times and average it so the result is more stable
-    start = time.time()
-    for i in range(100):
-        hashlib.md5(password.encode()).hexdigest()
-    md5_avg = (time.time() - start) / 100
-
-    # time bcrypt - only once because it already takes a while
-    start = time.time()
-    hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt())
-    bcrypt_time = time.time() - start
-
-    print(f"  md5 average (x100) : {md5_avg * 1000:.4f} ms")
-    print(f"  bcrypt (x1)        : {bcrypt_time * 1000:.1f} ms")
-    print(f"\n  bcrypt is roughly {int(bcrypt_time / md5_avg)}x slower")
-    print("  this is on purpose - slow hashing = harder to brute force\n")
+    print(f"  first salted hash  : {first_hash}")
+    print(f"  second salted hash : {second_hash}")
+    print(f"  different hashes  : {first_hash != second_hash}")
+    print(f"  correct password  : {check_if_match(password, first_hash, 'bcrypt')}")
+    print(f"  wrong password    : {check_if_match('wrong', first_hash, 'bcrypt')}")
+    print(f"  bcrypt hash creation (including salt): {elapsed * 1000:.1f} ms")
+    start = time.perf_counter()
+    hash_password(password, "md5")
+    print(f"  MD5 hash creation: {(time.perf_counter() - start) * 1000:.4f} ms")
+    print("  Illustrative timings only; hardware and workload affect results.")
+    print("  Salts and computational cost help protect stored passwords.")
 
 
-def main():
+def main() -> None:
     target = "abc"
-    wordlist = "wordlist.txt"
+    wordlist = Path(__file__).resolve().parent / "wordlist.txt"
 
-    print("\n=== password cracker demo ===")
+    print("\n=== Password Hasher: educational demo ===")
     print(f"target password: '{target}'")
     print("(in a real scenario you'd only have the hash, not the actual password)\n")
 
@@ -200,8 +190,20 @@ def main():
     print("example: python cracker.py --bcrypt\n")
 
 
+def run_cli() -> int:
+    parser = argparse.ArgumentParser(description="Password Hasher: synthetic educational demos")
+    parser.add_argument("--bcrypt", action="store_true", help="show salted password verification")
+    args = parser.parse_args()
+    try:
+        if args.bcrypt:
+            bcrypt_demo()
+        else:
+            main()
+    except (OSError, ValueError, RuntimeError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    return 0
+
+
 if __name__ == "__main__":
-    if "--bcrypt" in sys.argv:
-        bcrypt_demo()
-    else:
-        main()
+    sys.exit(run_cli())
